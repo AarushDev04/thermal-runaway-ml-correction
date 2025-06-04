@@ -192,3 +192,40 @@ cython_debug/
 #  refer to https://docs.cursor.com/context/ignore-files
 .cursorignore
 .cursorindexingignore
+# Python
+__pycache__/
+*.py[cod]
+*.so
+*.egg-info/
+dist/
+build/
+
+# Virtual Environment
+.venv/
+venv/
+env/
+
+# Data files (IMPORTANT - prevents accidental upload)
+*.xlsx
+*.xls
+**/MATLAB*.xlsx
+**/pointA*.xlsx
+**/proprietary_data/
+**/licensed_data/
+
+# Personal paths
+config_personal.py
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Results (optional - you can include these)
+# models/*.pkl
+# results/*.csv
