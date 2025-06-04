@@ -1,0 +1,113 @@
+"""
+Utility functions for the thermal runaway ML pipeline
+"""
+
+import pandas as pd
+import numpy as np
+import os
+
+def validate_csv_format(csv_path, expected_columns, csv_type):
+    """
+    Validate CSV file format before processing
+    
+    Args:
+        csv_path: Path to CSV file
+        expected_columns: List of expected column names
+        csv_type: Type of CSV ('0D' or '3D')
+    
+    Returns:
+        bool: True if valid, False otherwise
+    """
+    try:
+        df = pd.read_csv(csv_path)
+        
+        print(f"📋 Validating {csv_type} CSV format...")
+        print(f"  - File: {csv_path}")
+        print(f"  - Shape: {df.shape}")
+        print(f"  - Columns: {df.columns.tolist()}")
+        
+        # Check if all expected columns exist
+        missing_cols = [col for col in expected_columns if col not in df.columns]
+        if missing_cols:
+            print(f"❌ Missing columns: {missing_cols}")
+            return False
+        
+        # Check for empty data
+        if len(df) == 0:
+            print("❌ CSV file is empty!")
+            return False
+        
+        # Check for numeric data in temperature columns
+        temp_cols = [col for col in df.columns if 'temp' in col.lower()]
+        for col in temp_cols:
+            if not pd.api.types.is_numeric_dtype(df[col]):
+                print(f"❌ Column {col} is not numeric!")
+                return False
+        
+        print(f"✅ {csv_type} CSV format is valid!")
+        return True
+        
+    except Exception as e:
+        print(f"❌ Error validating {csv_type} CSV: {e}")
+        return False
+
+def create_sample_data():
+    """
+    Create sample data for testing if real data is not available
+    """
+    print("🔧 Creating sample data for testing...")
+    
+    # Create sample 0D data
+    time_0d = np.linspace(0, 100, 500)
+    temp_0d = 25 + 50 * np.exp(time_0d/50) + np.random.normal(0, 2, len(time_0d))
+    
+    df_0d = pd.DataFrame({
+        'time': time_0d,
+        'temperature': temp_0d
+    })
+    
+    # Create sample 3D data
+    time_3d = np.linspace(0, 100, 480)
+    temp_3d = 25 + 55 * np.exp(time_3d/48) + np.random.normal(0, 3, len(time_3d))
+    
+    df_3d = pd.DataFrame({
+        'Time Step': range(len(time_3d)),
+        'flow-time': time_3d,
+        'Volume-Average Static Temperature': temp_3d
+    })
+    
+    # Save sample data
+    os.makedirs('data', exist_ok=True)
+    df_0d.to_csv('data/sample_0d_data.csv', index=False)
+    df_3d.to_csv('data/sample_3d_data.csv', index=False)
+    
+    print("✅ Sample data created:")
+    print("  - data/sample_0d_data.csv")
+    print("  - data/sample_3d_data.csv")
+    
+    return True
+
+def check_dependencies():
+    """
+    Check if all required packages are installed
+    """
+    required_packages = [
+        'pandas', 'numpy', 'matplotlib', 'seaborn', 
+        'sklearn', 'xgboost', 'joblib'
+    ]
+    
+    missing_packages = []
+    
+    for package in required_packages:
+        try:
+            __import__(package)
+        except ImportError:
+            missing_packages.append(package)
+    
+    if missing_packages:
+        print(f"❌ Missing packages: {missing_packages}")
+        print("Install with: pip install " + " ".join(missing_packages))
+        return False
+    else:
+        print("✅ All required packages are installed!")
+        return True
