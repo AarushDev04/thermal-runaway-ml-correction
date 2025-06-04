@@ -1,0 +1,97 @@
+"""
+Enhanced execution script for thermal runaway ML pipeline
+"""
+
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
+from thermal_runaway_ml_pipeline import main_thermal_runaway_pipeline
+from config import DATA_PATHS
+from utils import check_dependencies, validate_csv_format, create_directories
+
+def pre_flight_checks():
+    """Run all pre-flight checks before pipeline execution"""
+    print("🔍 Running pre-flight checks...")
+    
+    # Check dependencies
+    if not check_dependencies():
+        return False
+    
+    # Create directories
+    create_directories()
+    
+    # Check if data files exist
+    for name, path in DATA_PATHS.items():
+        if not os.path.exists(path):
+            print(f"❌ Error: {name} file not found at {path}")
+            print(f"Please place your CSV file at: {path}")
+            print("Or run test_pipeline.py to create sample data")
+            return False
+    
+    # Validate data formats
+    if not validate_csv_format(DATA_PATHS['0d_csv'], ['time', 'temperature'], '0D'):
+        return False
+    
+    if not validate_csv_format(DATA_PATHS['3d_csv'], ['Time Step', 'flow-time', 'Volume-Average Static Temperature'], '3D'):
+        return False
+    
+    print("✅ All pre-flight checks passed!")
+    return True
+
+def main():
+    """Execute the complete pipeline with comprehensive error handling"""
+    
+    print("🚀 Starting Thermal Runaway ML Pipeline...")
+    print("="*60)
+    
+    # Run pre-flight checks
+    if not pre_flight_checks():
+        print("\n💡 TROUBLESHOOTING TIPS:")
+        print("1. Run: python test_pipeline.py (to create sample data)")
+        print("2. Check your CSV file paths in config.py")
+        print("3. Install missing packages: pip install -r requirements.txt")
+        return False
+    
+    # Run pipeline
+    try:
+        results = main_thermal_runaway_pipeline(
+            DATA_PATHS['0d_csv'],
+            DATA_PATHS['3d_csv']
+        )
+        
+        if results:
+            print("\n🎉 PIPELINE COMPLETED SUCCESSFULLY!")
+            print("="*60)
+            print("📁 Generated Files:")
+            print("  - models/: Trained ML models")
+            print("  - results/: Performance metrics and predictions")
+            print("  - plots/: Visualization outputs")
+            print("\n📊 Key Results:")
+            print(f"  - Best Model: {results.get('best_model_name', 'N/A')}")
+            print(f"  - Initial Error: {results.get('initial_error_percentage', 'N/A'):.2f}%")
+            if results.get('corrected_errors'):
+                best_error = min(results['corrected_errors'].values())
+                print(f"  - Best Corrected Error: {best_error:.2f}%")
+            return True
+        else:
+            print("❌ Pipeline failed!")
+            return False
+            
+    except Exception as e:
+        print(f"❌ Critical error: {e}")
+        print("\n🔧 DEBUG TIPS:")
+        print("1. Check data file formats")
+        print("2. Verify sufficient memory available")
+        print("3. Check Python package versions")
+        return False
+
+if __name__ == "__main__":
+    success = main()
+    if success:
+        print("\n🎯 Next Steps:")
+        print("1. Review generated visualizations")
+        print("2. Check model performance in results/")
+        print("3. Use trained models for new predictions")
+    else:
+        print("\n❌ Pipeline failed. Please fix issues and try again.")
