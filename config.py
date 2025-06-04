@@ -3,16 +3,16 @@ Configuration file for thermal runaway ML pipeline
 """
 import os
 
-# SAMPLE DATA PATHS (Public)
+# File paths - UPDATE THESE WITH YOUR ACTUAL PATHS
 DATA_PATHS = {
-    '0d_csv': 'data/sample_0d_data.csv',
-    '3d_csv': 'data/sample_3d_data.csv'
+    '0d_csv': 'data/0d_simulation_data.csv',  # ← Put your 0D CSV here
+    '3d_csv': 'data/3d_simulation_data.csv'   # ← Put your 3D CSV here
 }
 
-# FOR REAL DATA (Users must update these paths)
+# If using sample data, uncomment these lines:
 # DATA_PATHS = {
-#     '0d_csv': 'path/to/your/licensed/0d_data.xlsx',
-#     '3d_csv': 'path/to/your/licensed/3d_data.xlsx'
+#     '0d_csv': 'data/sample_0d_data.csv',
+#     '3d_csv': 'data/sample_3d_data.csv'
 # }
 
 # Model parameters
@@ -29,10 +29,8 @@ OUTPUT_DIRS = {
     'plots': 'plots/'
 }
 
-# Create directories
+# Create directories if they don't exist
 for dir_path in OUTPUT_DIRS.values():
     os.makedirs(dir_path, exist_ok=True)
 
-print("✅ Configuration loaded - Using sample data")
-print("⚠️  For real data: Update DATA_PATHS with your licensed files")
-
+print("✅ Configuration loaded successfully")
