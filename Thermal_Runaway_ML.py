@@ -20,6 +20,8 @@ Date: June 2025
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib
+matplotlib.use('TkAgg')  # Or 'Qt5Agg' if you have Qt installed
 import seaborn as sns
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
@@ -57,8 +59,9 @@ class ThermalRunawayDataProcessor:
     5. Error percentage calculations
     """
     
-    def __init__(self):
+    def __init__(self, config=None):
         """Initialize the data processor with empty scalers and feature storage"""
+        self.config = config
         self.scaler_0d = StandardScaler()  # For normalizing 0D data
         self.scaler_3d = StandardScaler()  # For normalizing 3D data
         self.feature_names = []            # Store feature column names
@@ -213,39 +216,122 @@ class ThermalRunawayDataProcessor:
         axes[0,1].axhline(y=120, color='red', linestyle='--', alpha=0.7, label='Critical (120°C)')
         axes[0,1].legend()
         
-        # PLOT 3: Temperature Distribution Comparison
-        axes[1,0].hist(self.data_0d['temperature_0d'], bins=30, alpha=0.7, 
-                       label='0D Model', color='blue', density=True)
-        axes[1,0].hist(self.data_3d['temperature_3d'], bins=30, alpha=0.7, 
-                       label='3D Model', color='red', density=True)
-        axes[1,0].set_title('Temperature Distribution Comparison', fontweight='bold')
-        axes[1,0].set_xlabel('Temperature')
-        axes[1,0].set_ylabel('Density')
-        axes[1,0].legend()
-        axes[1,0].grid(True, alpha=0.3)
-        
+        # PLOT 3: Temperature Distribution Comparison (FIXED)
+        try:
+            # Clean and filter data first
+            temp_0d_clean = self.data_0d['temperature_0d'].dropna()
+            temp_3d_clean = self.data_3d['temperature_3d'].dropna()
+    
+            # Convert to numeric and remove any invalid values
+            temp_0d_clean = pd.to_numeric(temp_0d_clean, errors='coerce').dropna()
+            temp_3d_clean = pd.to_numeric(temp_3d_clean, errors='coerce').dropna()
+    
+            # Check if we have valid data
+            if len(temp_0d_clean) == 0 or len(temp_3d_clean) == 0:
+                axes[1,0].text(0.5, 0.5, 'No valid temperature data available', 
+                      ha='center', va='center', transform=axes[1,0].transAxes,
+                      bbox=dict(boxstyle="round,pad=0.3", facecolor="red", alpha=0.7))
+                axes[1,0].set_title('Temperature Distribution - Data Error')
+                return
+    
+            # Handle temperature unit conversion if needed (Kelvin to Celsius)
+            if temp_0d_clean.max() > 500:  # Likely in Kelvin
+                temp_0d_clean = temp_0d_clean - 273.15
+            if temp_3d_clean.max() > 500:  # Likely in Kelvin
+                temp_3d_clean = temp_3d_clean - 273.15
+    
+            # Filter realistic temperature range (0-300°C for battery applications)
+            temp_0d_clean = temp_0d_clean[(temp_0d_clean >= 0) & (temp_0d_clean <= 300)]
+            temp_3d_clean = temp_3d_clean[(temp_3d_clean >= 0) & (temp_3d_clean <= 300)]
+    
+            # Calculate optimal number of bins
+            n_bins_0d = min(30, max(10, len(temp_0d_clean) // 20))
+            n_bins_3d = min(30, max(10, len(temp_3d_clean) // 20))
+            n_bins = min(n_bins_0d, n_bins_3d)
+    
+            # Create histograms with proper scaling
+            axes[1,0].hist(temp_0d_clean, bins=n_bins, alpha=0.6, 
+                   label=f'0D Model (n={len(temp_0d_clean)})', 
+                   color='blue', density=True, edgecolor='darkblue')
+            axes[1,0].hist(temp_3d_clean, bins=n_bins, alpha=0.6, 
+                   label=f'3D Model (n={len(temp_3d_clean)})', 
+                   color='red', density=True, edgecolor='darkred')
+    
+            # Add statistical information
+            mean_0d = temp_0d_clean.mean()
+            mean_3d = temp_3d_clean.mean()
+            std_0d = temp_0d_clean.std()
+            std_3d = temp_3d_clean.std()
+    
+            # Add mean lines
+            axes[1,0].axvline(mean_0d, color='blue', linestyle='--', linewidth=2, 
+                     label=f'0D Mean: {mean_0d:.1f}°C')
+            axes[1,0].axvline(mean_3d, color='red', linestyle='--', linewidth=2, 
+                     label=f'3D Mean: {mean_3d:.1f}°C')
+    
+            # Add thermal runaway thresholds
+            axes[1,0].axvline(60, color='orange', linestyle=':', alpha=0.8, 
+                     label='Warning (60°C)')
+            axes[1,0].axvline(120, color='darkred', linestyle=':', alpha=0.8, 
+                label='Critical (120°C)')
+    
+        # Format plot
+            axes[1,0].set_title('Temperature Distribution Comparison', fontweight='bold')
+            axes[1,0].set_xlabel('Temperature (°C)')
+            axes[1,0].set_ylabel('Probability Density')
+            axes[1,0].legend(loc='upper right', fontsize=8)
+            axes[1,0].grid(True, alpha=0.3)
+
+    # Add statistics text box
+            stats_text = (f'Statistics:\n'
+                 f'0D: μ={mean_0d:.1f}°C, σ={std_0d:.1f}°C\n'
+                 f'3D: μ={mean_3d:.1f}°C, σ={std_3d:.1f}°C\n'
+                 f'Difference: {abs(mean_3d-mean_0d):.1f}°C')
+
+            axes[1,0].text(0.02, 0.98, stats_text, transform=axes[1,0].transAxes,
+                  verticalalignment='top', bbox=dict(boxstyle='round', 
+                  facecolor='lightblue', alpha=0.8), fontsize=9)
+
+        except Exception as e:
+            # Error handling
+            axes[1,0].text(0.5, 0.5, f'Error creating distribution plot:\n{str(e)}', 
+                  ha='center', va='center', transform=axes[1,0].transAxes,
+                  bbox=dict(boxstyle="round,pad=0.3", facecolor="yellow", alpha=0.7))
+            axes[1,0].set_title('Temperature Distribution - Error')
+            print(f"Error in temperature distribution plot: {e}")
+
+
         # PLOT 4: Correlation Analysis (if possible)
-        if len(self.data_0d) == len(self.data_3d):
-            # Direct correlation possible
-            axes[1,1].scatter(self.data_0d['temperature_0d'], self.data_3d['temperature_3d'], 
-                             alpha=0.6, color='purple')
-            axes[1,1].plot([min(self.data_0d['temperature_0d'].min(), self.data_3d['temperature_3d'].min()),
-                           max(self.data_0d['temperature_0d'].max(), self.data_3d['temperature_3d'].max())],
-                          [min(self.data_0d['temperature_0d'].min(), self.data_3d['temperature_3d'].min()),
-                           max(self.data_0d['temperature_0d'].max(), self.data_3d['temperature_3d'].max())],
-                          'k--', alpha=0.5, label='Perfect Correlation')
-            axes[1,1].set_title('0D vs 3D Temperature Correlation', fontweight='bold')
-            axes[1,1].set_xlabel('0D Temperature')
-            axes[1,1].set_ylabel('3D Temperature')
-            axes[1,1].legend()
-            axes[1,1].grid(True, alpha=0.3)
-        else:
-            # Show data size mismatch info
-            axes[1,1].text(0.5, 0.5, f'Data Size Mismatch:\n0D: {len(self.data_0d)} points\n3D: {len(self.data_3d)} points\n\nInterpolation needed\nfor correlation analysis', 
-                          ha='center', va='center', transform=axes[1,1].transAxes,
-                          bbox=dict(boxstyle="round,pad=0.3", facecolor="yellow", alpha=0.7))
-            axes[1,1].set_title('Data Alignment Status', fontweight='bold')
-        
+        from scipy.interpolate import interp1d
+        # PLOT 4: 0D vs 3D Temperature Correlation (with interpolation)
+        from scipy.interpolate import interp1d
+
+        # Find overlapping time range
+        min_time = max(self.data_0d['time'].min(), self.data_3d['flow_time'].min())
+        max_time = min(self.data_0d['time'].max(), self.data_3d['flow_time'].max())
+        n_points = min(len(self.data_0d), len(self.data_3d))
+        common_time = np.linspace(min_time, max_time, n_points)
+
+        # Interpolate both datasets onto the common grid
+        interp_0d = interp1d(self.data_0d['time'], self.data_0d['temperature_0d'], kind='linear', fill_value='extrapolate')
+        interp_3d = interp1d(self.data_3d['flow_time'], self.data_3d['temperature_3d'], kind='linear', fill_value='extrapolate')
+        temp_0d_aligned = interp_0d(common_time)
+        temp_3d_aligned = interp_3d(common_time)
+
+        # Now plot the correlation
+        axes[1,1].scatter(temp_0d_aligned, temp_3d_aligned, alpha=0.6, color='purple')
+        axes[1,1].plot(
+            [min(temp_0d_aligned.min(), temp_3d_aligned.min()), max(temp_0d_aligned.max(), temp_3d_aligned.max())],
+            [min(temp_0d_aligned.min(), temp_3d_aligned.min()), max(temp_0d_aligned.max(), temp_3d_aligned.max())],
+            'k--', alpha=0.5, label='Perfect Correlation'
+        )
+        axes[1,1].set_title('0D vs 3D Temperature Correlation', fontweight='bold')
+        axes[1,1].set_xlabel('0D Temperature')
+        axes[1,1].set_ylabel('3D Temperature')
+        axes[1,1].legend()
+        axes[1,1].grid(True, alpha=0.3)
+
+                
         plt.tight_layout()
         plt.show()
         
@@ -547,7 +633,62 @@ class ThermalRunawayMLPipeline:
             print("✓ Missing values filled with mean values")
         
         return X, y, feature_cols
+    def _train_point_models(self, point, features):
+        """Train models with proper error handling"""
+        point_results = {}
     
+        for model_name, model in self.models.items():
+            try:
+            # Training logic here
+                point_results[model_name] = { ... }
+            except Exception as e:
+                print(f"❌ {model_name} failed for {point}: {str(e)}")
+                point_results[model_name] = {'error': str(e)}
+    
+        return point_results
+
+    def _initialize_models(self):
+        """Initialize ML models with optimized parameters"""
+        return {
+            'RandomForest': RandomForestRegressor(
+            n_estimators=200,
+            max_depth=15,
+            min_samples_split=5,
+            min_samples_leaf=2,
+            random_state=self.config.random_state,
+            n_jobs=-1
+            ),
+            'XGBoost': xgb.XGBRegressor(
+            n_estimators=200,
+            max_depth=8,
+            learning_rate=0.1,
+            subsample=0.8,
+            colsample_bytree=0.8,
+            random_state=self.config.random_state,
+            n_jobs=-1
+            ),
+        # Fixed line below
+            'GradientBoosting': GradientBoostingRegressor(
+            n_estimators=200,
+            max_depth=8,
+            learning_rate=0.1,
+            subsample=0.8,
+            random_state=self.config.random_state
+            ),
+            'Ridge': Ridge(alpha=1.0, random_state=self.config.random_state),
+            'Lasso': Lasso(alpha=0.1, random_state=self.config.random_state),
+            'SVR': SVR(C=1.0, epsilon=0.1, kernel='rbf'),
+            'NeuralNetwork': MLPRegressor(
+                hidden_layer_sizes=(100, 50, 25),
+                activation='relu',
+                solver='adam',
+                alpha=0.001,
+                learning_rate='adaptive',
+                max_iter=1000,
+                random_state=self.config.random_state
+            )
+        }
+
     def initialize_models(self):
         """
         INITIALIZE MULTIPLE ML ALGORITHMS
@@ -587,13 +728,13 @@ class ThermalRunawayMLPipeline:
                 random_state=42        # For reproducibility
             ),
             'xgboost': xgb.XGBRegressor(
-                n_estimators=100,      # Number of trees
-                learning_rate=0.1,     # Learning rate
-                max_depth=6,           # Maximum tree depth
-                min_child_weight=1,    # Minimum sum of weights in child
-                subsample=0.8,         # Subsample ratio
-                colsample_bytree=0.8,  # Feature subsample ratio
-                random_state=42        # For reproducibility
+                n_estimators=100,
+                learning_rate=0.1,
+                max_depth=6,
+                min_child_weight=1,
+                subsample=0.8,
+                colsample_bytree=0.8,
+                random_state=42
             ),
             
             # SUPPORT VECTOR MACHINE - Good for complex boundaries
@@ -616,7 +757,7 @@ class ThermalRunawayMLPipeline:
                 validation_fraction=0.1,            # Validation set size
                 random_state=42                     # For reproducibility
             )
-        }
+    }
         
         print(f"✓ Initialized {len(self.models)} ML models:")
         for name in self.models.keys():
@@ -1324,6 +1465,40 @@ class ThermalRunawayVisualizer:
         
         print("✓ Error percentage comparison visualization completed")
 
+def print_correction_factors_for_all_points(xlsx_0d_path, xlsx_3d_paths):
+    """
+    PRINTS THE CORRECTION FACTOR STATISTICS FOR EACH POINT (A, B, C, D)
+    ===================================================================
+    For each point, loads the data, aligns, and prints mean, min, max correction factor.
+    Args:
+        xlsx_0d_path (str): Path to the 0D Excel file.
+        xlsx_3d_paths (list): List of paths to the 3D Excel files for points A, B, C, D.
+    """
+    points = ['A', 'B', 'C', 'D']
+    print("="*60)
+    print("CORRECTION FACTOR STATISTICS FOR EACH POINT")
+    print("="*60)
+    for idx, point in enumerate(points):
+        print(f"\n--- Point {point} ---")
+        try:
+            processor = ThermalRunawayDataProcessor()
+            # Load only the relevant 0D and 3D data for this point
+            data_0d, data_3d = processor.load_data(xlsx_0d_path, [xlsx_3d_paths[idx]])
+            # Filter for this point
+            data_0d = data_0d[data_0d['point'] == point].reset_index(drop=True)
+            data_3d = data_3d[data_3d['point'] == point].reset_index(drop=True)
+            processor.data_0d = data_0d
+            processor.data_3d = data_3d
+            processor.align_data_by_interpolation()
+            processor.calculate_correction_factor()
+            cf = processor.aligned_data['correction_factor']
+            print(f"Correction Factor Stats for Point {point}:")
+            print(f"  Mean: {cf.mean():.4f}")
+            print(f"  Min:  {cf.min():.4f}")
+            print(f"  Max:  {cf.max():.4f}")
+        except Exception as e:
+            print(f"  Error processing point {point}: {e}")
+
 # ============================================================================
 # MAIN EXECUTION PIPELINE
 # ============================================================================
@@ -1343,7 +1518,7 @@ def main_thermal_runaway_pipeline(xlsx_0d_path, xlsx_3d_paths):
     
     Args:
         xlsx_0d_path (str): Path to your 0D Excel file (all points)
-        xlsx_3d_paths (list): List of paths to your 3D Excel files (A, B, C, D)
+        xlsx_3d_paths (list): List of paths to your  3D Excel files (A, B, C, D)
     
     Returns:
         dict: Complete results including models, performance metrics, and predictions
@@ -1418,6 +1593,11 @@ def main_thermal_runaway_pipeline(xlsx_0d_path, xlsx_3d_paths):
         X, y, test_size=0.2, random_state=42, shuffle=True
     )
     
+    # Add these lines:
+    test_indices = X_test.index
+    original_0d_temps = aligned_data.loc[test_indices, 'temperature_0d']
+    original_3d_temps = aligned_data.loc[test_indices, 'temperature_3d']
+    
     # Scale features for better ML performance
     scaler = StandardScaler()
     X_train_scaled = scaler.fit_transform(X_train)
@@ -1473,6 +1653,9 @@ def main_thermal_runaway_pipeline(xlsx_0d_path, xlsx_3d_paths):
     except Exception as e:
         print(f"❌ Error in ensemble creation: {e}")
         ensemble_pred = None
+        ensemble_mae = None
+        ensemble_r2 = None
+        ensemble_error_pct = None
     
     # ========================================================================
     # STEP 9: CALCULATE ERROR IMPROVEMENTS
@@ -1574,6 +1757,8 @@ def main_thermal_runaway_pipeline(xlsx_0d_path, xlsx_3d_paths):
         })
         
         # Add original temperatures for reference
+        original_0d_temps = final_data['temperature_0d']
+        original_3d_temps = final_data['temperature_3d']
         results_df['original_0d_temp'] = original_0d_temps.values
         results_df['original_3d_temp'] = original_3d_temps.values
         
@@ -1660,284 +1845,17 @@ def main_thermal_runaway_pipeline(xlsx_0d_path, xlsx_3d_paths):
         'test_results': results_df
     }
 
-# ============================================================================
-# PREDICTION FUNCTION FOR NEW DATA
-# ============================================================================
-
-def predict_correction_factor(new_0d_data, trained_model, scaler, feature_names):
-    """
-    USE TRAINED MODEL TO PREDICT CORRECTION FACTORS FOR NEW DATA
-    ===========================================================
-    
-    This function applies the trained ML model to new 0D simulation data
-    to predict correction factors and generate enhanced temperature predictions.
-    
-    Args:
-        new_0d_data (DataFrame): New 0D data with columns ['time', 'temperature_0d']
-        trained_model: The trained ML model object
-        scaler: The fitted feature scaler object
-        feature_names (list): List of feature names used in training
-    
-    Returns:
-        DataFrame: Enhanced predictions with correction factors and corrected temperatures
-    """
-    
-    print("\n" + "="*60)
-    print("🔮 PREDICTING CORRECTION FACTORS FOR NEW DATA")
-    print("="*60)
-    
-    try:
-        # Create a copy of the input data
-        processed_data = new_0d_data.copy()
-        
-        # Ensure correct column names
-        if 'time' not in processed_data.columns or 'temperature_0d' not in processed_data.columns:
-            print("❌ Error: New data must have columns 'time' and 'temperature_0d'")
-            return None
-        
-        print(f"📊 Processing {len(processed_data)} new data points...")
-        
-        # ====================================================================
-        # FEATURE ENGINEERING (SAME AS TRAINING)
-        # ====================================================================
-        print("🔧 Engineering features...")
-        
-        # 1. Time normalization
-        processed_data['time_normalized'] = (
-            (processed_data['time'] - processed_data['time'].min()) /
-            (processed_data['time'].max() - processed_data['time'].min())
-        )
-        
-        # 2. Temperature normalization
-        processed_data['temp_0d_normalized'] = (
-            (processed_data['temperature_0d'] - processed_data['temperature_0d'].min()) /
-            (processed_data['temperature_0d'].max() - processed_data['temperature_0d'].min())
-        )
-        
-        # 3. Temperature derivative
-        processed_data['temp_0d_derivative'] = np.gradient(processed_data['temperature_0d'])
-        
-        # 4. Rolling statistics
-        window_size = max(2, min(5, len(processed_data) // 10))
-        if window_size >= 2:
-            processed_data['temp_0d_rolling_mean'] = (
-                processed_data['temperature_0d'].rolling(window=window_size, center=True).mean()
-            )
-            processed_data['temp_0d_rolling_std'] = (
-                processed_data['temperature_0d'].rolling(window=window_size, center=True).std()
-            )
-        
-        # Fill NaN values
-        processed_data = processed_data.fillna(method='bfill').fillna(method='ffill')
-        
-        # 5. Temperature range indicators
-        processed_data['temp_range_low'] = (processed_data['temperature_0d'] < 60).astype(int)
-        processed_data['temp_range_medium'] = ((processed_data['temperature_0d'] >= 60) & 
-                                              (processed_data['temperature_0d'] < 120)).astype(int)
-        processed_data['temp_range_high'] = (processed_data['temperature_0d'] >= 120).astype(int)
-        
-        # 6. Interaction features
-        processed_data['temp_time_interaction'] = (
-            processed_data['temperature_0d'] * processed_data['time_normalized']
-        )
-        processed_data['temp_derivative_interaction'] = (
-            processed_data['temperature_0d'] * processed_data['temp_0d_derivative']
-        )
-        
-        # ====================================================================
-        # PREPARE FEATURES FOR PREDICTION
-        # ====================================================================
-        
-        # Select only the features used in training
-        try:
-            X_new = processed_data[feature_names]
-        except KeyError as e:
-            print(f"❌ Error: Missing feature {e}. Check if new data has same structure as training data.")
-            return None
-        
-        # Scale features using the same scaler from training
-        X_new_scaled = scaler.transform(X_new)
-        
-        # ====================================================================
-        # MAKE PREDICTIONS
-        # ====================================================================
-        print("🤖 Making predictions...")
-        
-        # Predict correction factors
-        correction_factors = trained_model.predict(X_new_scaled)
-        
-        # Calculate corrected 3D temperatures
-        corrected_temperatures = processed_data['temperature_0d'] * correction_factors
-        
-        # ====================================================================
-        # PREPARE RESULTS
-        # ====================================================================
-        
-        # Create results DataFrame
-        results = processed_data[['time', 'temperature_0d']].copy()
-        results['predicted_correction_factor'] = correction_factors
-        results['predicted_temperature_3d'] = corrected_temperatures
-        results['temperature_difference'] = corrected_temperatures - processed_data['temperature_0d']
-        results['improvement_percentage'] = (results['temperature_difference'] / processed_data['temperature_0d'] * 100)
-        
-        print("✅ Predictions completed successfully!")
-        print(f"📊 PREDICTION SUMMARY:")
-        print(f"  - Average correction factor: {correction_factors.mean():.4f}")
-        print(f"  - Correction factor range: {correction_factors.min():.4f} to {correction_factors.max():.4f}")
-        print(f"  - Average temperature improvement: {results['temperature_difference'].mean():.2f}°C")
-        print(f"  - Max temperature improvement: {results['temperature_difference'].max():.2f}°C")
-        
-        return results
-        
-    except Exception as e:
-        print(f"❌ Error in prediction: {e}")
-        return None
-
-# ============================================================================
-# EXAMPLE USAGE AND MAIN EXECUTION
-# ============================================================================
+def main():
+    # Define your file paths here
+    xlsx_0d_path = r"C:\Users\KIIT0001\Desktop\JU\Thermal_Runaway\Arush\MATLAB DATA.xlsx"
+    xlsx_3d_paths = [
+        r"C:\Users\KIIT0001\Desktop\JU\Thermal_Runaway\Arush\Point A\pointA.xlsx.txt.xlsx",
+        r"C:\Users\KIIT0001\Desktop\JU\Thermal_Runaway\Arush\Point B\vol-mon-1.out.xlsx",
+        r"C:\Users\KIIT0001\Desktop\JU\Thermal_Runaway\Arush\Point C\vol-mon-1.out.xlsx",
+        r"C:\Users\KIIT0001\Desktop\JU\Thermal_Runaway\Arush\Point D\vol-mon-1.out.xlsx"
+    ]
+    # Call your main pipeline function
+    main_thermal_runaway_pipeline(xlsx_0d_path, xlsx_3d_paths)
 
 if __name__ == "__main__":
-    """
-    MAIN EXECUTION BLOCK
-    ===================
-    """
-
-    print("🔥 THERMAL RUNAWAY ML PIPELINE - READY TO START")
-    print("="*80)
-
-    # ========================================================================
-    # *** UPDATED FILE PATHS FOR 3D DATA POINTS A, B, C, D ***
-    # ========================================================================
-    points = ['A', 'B', 'C', 'D']
-    xlsx_0d_path = r"C:\Users\KIIT0001\Desktop\JU\Arush\MATLAB DATA.xlsx"
-    xlsx_3d_paths = [
-        r"C:\Users\KIIT0001\Desktop\JU\Arush\Point A\pointA.xlsx.txt.xlsx",
-        r"C:\Users\KIIT0001\Desktop\JU\Arush\Point B\vol-mon-1.out.xlsx",
-        r"C:\Users\KIIT0001\Desktop\JU\Arush\Point C\vol-mon-1.out.xlsx",
-        r"C:\Users\KIIT0001\Desktop\JU\Arush\Point D\vol-mon-1.out.xlsx"
-    ]
-
-    all_results = {}
-    for idx, point in enumerate(points):
-        print(f"\n{'='*80}\nPROCESSING POINT {point}\n{'='*80}")
-        # Load only the relevant 0D data for this point
-        data_processor = ThermalRunawayDataProcessor()
-        # Only load the sheet for this point
-        data_0d, data_3d = data_processor.load_data(
-            xlsx_0d_path, [xlsx_3d_paths[idx]]
-        )
-        # Filter 0D data for this point
-        data_0d = data_0d[data_0d['point'] == point].reset_index(drop=True)
-        data_processor.data_0d = data_0d
-        # Filter 3D data for this point (should only be one file)
-        data_3d = data_3d[data_3d['point'] == point].reset_index(drop=True)
-        data_processor.data_3d = data_3d
-
-        # Now run the rest of the pipeline as usual, but for this point only
-        try:
-            data_processor.visualize_raw_data()
-            aligned_data = data_processor.align_data_by_interpolation()
-            corrected_data = data_processor.calculate_correction_factor()
-            final_data = data_processor.engineer_features()
-            ml_pipeline = ThermalRunawayMLPipeline()
-            X, y, feature_names = ml_pipeline.prepare_features_target(final_data)
-            X_train, X_test, y_train, y_test = train_test_split(
-                X, y, test_size=0.2, random_state=42, shuffle=True
-            )
-            scaler = StandardScaler()
-            X_train_scaled = scaler.fit_transform(X_train)
-            X_test_scaled = scaler.transform(X_test)
-            X_train_scaled = pd.DataFrame(X_train_scaled, columns=feature_names)
-            X_test_scaled = pd.DataFrame(X_test_scaled, columns=feature_names)
-            ml_pipeline.initialize_models()
-            ml_pipeline.train_and_evaluate_models(X_train_scaled, X_test_scaled, y_train, y_test)
-            best_model_name, best_model = ml_pipeline.select_best_model()
-            ml_pipeline.extract_feature_importance(feature_names)
-            ensemble_pred = ml_pipeline.create_ensemble_prediction(X_test_scaled)
-            # ... (rest of the steps as in your main pipeline)
-            # Save or print results for this point
-            all_results[point] = {
-                "data_processor": data_processor,
-                "ml_pipeline": ml_pipeline,
-                "best_model": best_model,
-                "best_model_name": best_model_name,
-                # ...add more as needed
-            }
-        except Exception as e:
-            print(f"❌ Error processing point {point}: {e}")
-    
-    # =========================
-    # SUMMARY VISUALIZATION
-    # =========================
-    print("\n" + "="*80)
-    print("📊 OVERALL RESULTS SUMMARY FOR ALL POINTS")
-    print("="*80)
-
-    # Collect results for all points
-    summary_data = []
-    for point in points:
-        result = all_results.get(point)
-        if result and result["best_model_name"]:
-            ml_pipeline = result["ml_pipeline"]
-            best_model_name = result["best_model_name"]
-            perf = ml_pipeline.model_performance[best_model_name]
-            summary_data.append({
-                "Point": point,
-                "Best Model": best_model_name,
-                "R2 Score": perf["test_r2"],
-                "MAE": perf["test_mae"],
-                "Error %": perf["test_error_pct"]
-            })
-        else:
-            summary_data.append({
-                "Point": point,
-                "Best Model": "N/A",
-                "R2 Score": 0,
-                "MAE": 0,
-                "Error %": 100
-            })
-
-    import pandas as pd
-    summary_df = pd.DataFrame(summary_data)
-
-    print(summary_df)
-
-    # --- Visualization: Bar Chart for Model Effectiveness ---
-    fig, axes = plt.subplots(1, 3, figsize=(18, 6))
-    fig.suptitle("Thermal Runaway ML Pipeline Results by Point", fontsize=16, fontweight='bold')
-
-    # R2 Score
-    axes[0].bar(summary_df["Point"], summary_df["R2 Score"], color='skyblue')
-    axes[0].set_title("Best Model R² Score")
-    axes[0].set_ylabel("R² Score")
-    axes[0].set_ylim(0, 1)
-    for idx, val in enumerate(summary_df["R2 Score"]):
-        axes[0].text(idx, val + 0.02, f"{val:.2f}", ha='center', fontweight='bold')
-
-    # MAE
-    axes[1].bar(summary_df["Point"], summary_df["MAE"], color='lightgreen')
-    axes[1].set_title("Best Model MAE")
-    axes[1].set_ylabel("Mean Absolute Error")
-    for idx, val in enumerate(summary_df["MAE"]):
-        axes[1].text(idx, val + 0.02, f"{val:.2f}", ha='center', fontweight='bold')
-
-    # Error %
-    axes[2].bar(summary_df["Point"], summary_df["Error %"], color='salmon')
-    axes[2].set_title("Best Model Error Percentage")
-    axes[2].set_ylabel("Error Percentage (%)")
-    for idx, val in enumerate(summary_df["Error %"]):
-        axes[2].text(idx, val + 0.5, f"{val:.2f}%", ha='center', fontweight='bold')
-
-    plt.tight_layout(rect=[0, 0.03, 1, 0.95])
-    plt.show()
-
-    # --- Effectiveness and Objectives ---
-    print("\n🎯 OBJECTIVES ACHIEVED:")
-    print("- Successfully loaded and processed 0D and 3D simulation data for all points (A, B, C, D).")
-    print("- Applied advanced feature engineering and trained multiple ML models per point.")
-    print("- Selected the best model for each point based on R² score and error percentage.")
-    print("- Achieved significant error reduction between 0D and 3D predictions using ML correction.")
-    print("- Generated comprehensive visualizations for model performance and error analysis.")
-
-    print("\n✅ The pipeline demonstrates the effectiveness of ML-based correction for thermal runaway prediction in lithium-ion batteries, achieving improved accuracy and reliability for each critical point.")
+    main()
