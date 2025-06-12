@@ -156,6 +156,17 @@ class ThermalRunawayDataProcessor:
 
         print("✓ Column names standardized")
 
+        # Fix 0D data (Kelvin to Celsius if needed)
+        if self.data_0d['temperature_0d'].mean() > 200:
+            self.data_0d['temperature_0d'] = self.data_0d['temperature_0d'] - 273.15
+
+        # Fix 3D data (scale and convert if needed)
+        if self.data_3d['temperature_3d'].max() > 1000:
+            self.data_3d['temperature_3d'] = self.data_3d['temperature_3d'] / 1000
+        if self.data_3d['temperature_3d'].mean() > 200:
+            self.data_3d['temperature_3d'] = self.data_3d['temperature_3d'] - 273.15
+
+
         # --- Display data summary ---
         print("\n📊 DATA SUMMARY:")
         print("0D Data Preview:")
