@@ -522,14 +522,10 @@ python -c "import sklearn, xgboost, pandas; print('All packages installed')"
 ## 📞 Contact Information
 
 ### For Academic Collaboration
-- **Email**: your-academic-email@university.edu
-- **Research Group**: [Your Research Group Website]
-- **ORCID**: [Your ORCID ID]
-
+- **Email**:aarush.dev.1204@gmail.com
 ### For Commercial Licensing
-- **Business Email**: your-business-email@domain.com
-- **LinkedIn**: [Your LinkedIn Profile]
-- **Phone**: [Your Contact Number]
+- **LinkedIn**:[ [Your LinkedIn Profile]](https://www.linkedin.com/in/aarush-dev-177223283/)
+
 
 ### For Data Access Requests
 Please include in your request:
